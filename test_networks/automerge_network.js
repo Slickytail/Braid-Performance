@@ -1,10 +1,14 @@
-function run_trial_automerge(dl) {
+module.exports = {run_trial: run_trial}
+var Automerge = require("automerge")
+var tests = require("../local_modules/tests")
+
+function run_trial(dl) {
 
     var n_clients = dl.d.C
     var clients = {}
     var w = dl.w
     
-    var server = automerge_create_server({
+    var server = create_server({
         add_version: (uid, changes) => {
             clients[uid].add_incoming(() => {
                 clients[uid].add_version(changes)
@@ -14,7 +18,7 @@ function run_trial_automerge(dl) {
     
     for (var cid of dl.client_ids) {
         ;(() => {
-            var c = automerge_create_client({
+            var c = create_client({
                 join : (uid) => {
                     c.add_outgoing(() => {
                         server.join(uid)
@@ -39,13 +43,13 @@ function run_trial_automerge(dl) {
         c.join()
     })
         
-    read_dialogue(w, clients)
+    tests.read(w, clients)
     
-    good_check([server].concat(Object.values(clients)))
+    tests.good_check([server].concat(Object.values(clients)))
     
 }
 
-function automerge_create_client(s_funcs, uid) {
+function create_client(s_funcs, uid) {
     var c = {}
     c.uid = uid
     c.state = 'disconnected'
@@ -96,7 +100,7 @@ function automerge_create_client(s_funcs, uid) {
     return c
 }
 
-function automerge_create_server(c_funcs, s_text) {
+function create_server(c_funcs, s_text) {
     var s = {}
     
     var root = Automerge.init()

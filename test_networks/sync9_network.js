@@ -1,10 +1,15 @@
-function run_trial_sync9(dl) {
+module.exports = {run_trial: run_trial}
+var sync9 = require("../local_modules/sync9")
+var tests = require("../local_modules/tests")
+var random = require("../local_modules/random")
+
+function run_trial(dl) {
 
     var n_clients = dl.d.C
     var clients = {}
     var w = dl.w
     
-    var server = sync9_create_server({
+    var server = create_server({
         add_version: (uid, vid, parents, changes) => {
             clients[uid].add_incoming(() => {
                 clients[uid].add_version(vid, parents, changes)
@@ -19,7 +24,7 @@ function run_trial_sync9(dl) {
     
     for (var cid of dl.client_ids) {
         ;(() => {
-            var c = sync9_create_client({
+            var c = create_client({
                 join : (uid, leaves) => {
                     c.add_outgoing(() => {
                         server.join(uid, leaves)
@@ -49,24 +54,23 @@ function run_trial_sync9(dl) {
         c.join()
     })
     
-    read_dialogue(w, clients)
-    
+    tests.read(w, clients)
     
     Object.values(clients).forEach(c => {
-        c.add_version(sync9_guid(), c.s9.leaves, [])
+        c.add_version(random.guid(), c.s9.leaves, [])
     })
     
-    good_check([server].concat(Object.values(clients)))
+    tests.good_check([server].concat(Object.values(clients)))
 }
 
-function sync9_create_client(s_funcs, uid) {
+function create_client(s_funcs, uid) {
     var c = {}
     
     function init() {
-        c.s9 = sync9_create()
+        c.s9 = sync9.create()
         
-        sync9_add_version(c.s9, 'v1', {root: true}, [' = ""'])
-        sync9_prune(c.s9, (a, b) => true, (a, b) => true)
+        sync9.add_version(c.s9, 'v1', {root: true}, [' = ""'])
+        sync9.prune(c.s9, (a, b) => true, (a, b) => true)
         delete c.s9.T.v1
         c.s9.leaves = {root: true}
     }
@@ -96,7 +100,7 @@ function sync9_create_client(s_funcs, uid) {
     
     c.add_version = (vid, parents, changes) => {
         if (Object.keys(c.delete_us).length > 0) {
-            var deleted = sync9_prune(c.s9, (a, b) => c.delete_us[b], (a, b) => c.delete_us[a])
+            var deleted = sync9.prune(c.s9, (a, b) => c.delete_us[b], (a, b) => c.delete_us[a])
             if (!Object.keys(c.delete_us).every(x => deleted[x])) throw 'wtf?'
             if (!Object.keys(deleted).every(x => c.delete_us[x])) throw 'wtf?'
             c.delete_us = {}
@@ -115,12 +119,12 @@ function sync9_create_client(s_funcs, uid) {
         
         if (!c.got_first_version) {
             c.got_first_version = true
-            var save = sync9_read(c.s9)
+            var save = sync9.read(c.s9)
             init()
-            sync9_add_version(c.s9, vid, parents, changes)
+            sync9.add_version(c.s9, vid, parents, changes)
             c.local_add_version(['[0:0]=' + JSON.stringify(save)])
         } else {
-            sync9_add_version(c.s9, vid, parents, changes)
+            sync9.add_version(c.s9, vid, parents, changes)
         }
         s_funcs.ack(c.uid, vid)
     }
@@ -132,7 +136,7 @@ function sync9_create_client(s_funcs, uid) {
         c.delete_us[vid] = true
         
         if (c.server_leaves[vid]) {
-            var ancs = sync9_get_ancestors(c.s9, c.server_leaves)
+            var ancs = sync9.get_ancestors(c.s9, c.server_leaves)
             Object.keys(c.delete_us).forEach(x => {
                 delete ancs[x]
             })
@@ -152,18 +156,18 @@ function sync9_create_client(s_funcs, uid) {
     
     c.local_add_version = (changes) => {
         var x = {
-            vid : sync9_guid(),
+            vid : sync9.guid(),
             parents : Object.assign({}, c.s9.leaves),
             changes : changes
         }
-        sync9_add_version(c.s9, x.vid, c.s9.leaves, x.changes)
+        sync9.add_version(c.s9, x.vid, c.s9.leaves, x.changes)
         if (c.got_first_version) {
             c.unacked.push(x)
             s_funcs.add_version(c.uid, x.vid, x.parents, x.changes)
         }
         return x
     }
-    c.read = () => sync9_read(c.s9)
+    c.read = () => sync9.read(c.s9)
     c.change_frac = (start, len, ins) => {
         var s = Math.floor(c.read().length * start)
         var changes = [`[${s}:${s + len}] = ` + JSON.stringify(ins)]
@@ -172,11 +176,11 @@ function sync9_create_client(s_funcs, uid) {
     return c
 }
 
-function sync9_create_server(c_funcs, s_text) {
+function create_server(c_funcs, s_text) {
     var s = {}
     
-    s.s9 = sync9_create()
-    sync9_add_version(s.s9, 'v1', {root : true}, [` = "${s_text}"`])
+    s.s9 = sync9.create()
+    sync9.add_version(s.s9, 'v1', {root : true}, [` = "${s_text}"`])
 
     s.peers = {}
     s.prune_info = {
@@ -188,11 +192,11 @@ function sync9_create_server(c_funcs, s_text) {
         var q = (a, b) => (a != 'root') && !s.s9.leaves[b] && Object.keys(s.prune_info[a].sent).every(x => s.prune_info[b].acked[x])
         
         var clone = JSON.parse(JSON.stringify(s.s9))
-        var deleted = sync9_prune2(clone, q, q)
+        var deleted = sync9.prune2(clone, q, q)
         
         while (Object.keys(deleted).length > 0) {
             var clone = JSON.parse(JSON.stringify(s.s9))
-            var deleted2 = sync9_prune2(clone, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
+            var deleted2 = sync9.prune2(clone, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
             
             if (Object.keys(deleted).some(x => !deleted2[x])) {
                 deleted = deleted2
@@ -204,7 +208,7 @@ function sync9_create_server(c_funcs, s_text) {
         var backup_parents = {}
         Object.keys(deleted).forEach(x => backup_parents[x] = s.s9.T[x])
 
-        var deleted2 = sync9_prune2(s.s9, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
+        var deleted2 = sync9.prune2(s.s9, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
         
         if (Object.keys(deleted).some(x => !deleted2[x]) || Object.keys(deleted2).some(x => !deleted[x])) {
             throw 'wtf?'
@@ -239,7 +243,7 @@ function sync9_create_server(c_funcs, s_text) {
         }
         Object.keys(leaves).forEach(k => mark_ancs(k))
         
-        sync9_extract_versions(s.s9, x => ancs[x], x => true).forEach(x => {
+        sync9.extract_versions(s.s9, x => ancs[x], x => true).forEach(x => {
             c_funcs.add_version(uid, x.vid, x.parents, x.changes)
             s.prune_info[x.vid].sent[uid] = true
         })
@@ -266,7 +270,7 @@ function sync9_create_server(c_funcs, s_text) {
             }
         })
          
-        sync9_add_version(s.s9, vid, parents, changes)
+        sync9.add_version(s.s9, vid, parents, changes)
         Object.entries(s.peers).forEach(x => {
             if (x[1].online) {
                 c_funcs.add_version(x[0], vid, parents, changes)
@@ -274,7 +278,7 @@ function sync9_create_server(c_funcs, s_text) {
             }
         })
         
-        var ancs = sync9_get_ancestors(s.s9, parents)
+        var ancs = sync9.get_ancestors(s.s9, parents)
         Object.keys(ancs).forEach(x => {
             var pi = s.prune_info[x]
             if (pi) pi.acked[uid] = true
@@ -297,7 +301,7 @@ function sync9_create_server(c_funcs, s_text) {
         var p = s.peers[uid]
         if (p) p.online = false
     }
-    s.read = () => sync9_read(s.s9)
+    s.read = () => sync9.read(s.s9)
     
     return s
 }

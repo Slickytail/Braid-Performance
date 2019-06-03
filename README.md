@@ -1,1 +1,1 @@
-# Braid (Sync9) Performance Test
+# Sync9 Performance Tester

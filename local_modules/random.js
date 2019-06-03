@@ -1,7 +1,8 @@
-
+module.exports = {seed: seed,
+                  guid: guid}
 // this function added by me
 
-Math.randomSeed = function (seed) {
+function seed(seed) {
   if (typeof(seed) == 'string') {
     var t = new MersenneTwister(0)
     var a = []
@@ -18,7 +19,13 @@ Math.randomSeed = function (seed) {
     return t.random()
   }
 }
-
+function guid() {
+    var x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    var s = []
+    for (var i = 0; i < 15; i++)
+        s.push(x[Math.floor(Math.random() * x.length)])
+    return s.join('')
+}
 /* The following piece of code is an implementation of MersenneTwister object
    taken from https://gist.github.com/banksean/300494, with one method 
    xor_array(array, size) added.

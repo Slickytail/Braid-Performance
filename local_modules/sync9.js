@@ -1,3 +1,12 @@
+module.exports = {create: sync9_create,
+                  add_version: sync9_add_version,
+                  read: sync9_read,
+                  get_ancestors: sync9_get_ancestors,
+                  extract_versions: sync9_extract_versions,
+                  prune: sync9_prune,
+                  prune2: sync9_prune2,
+}
+
 function sync9_prune2(x, has_everyone_whos_seen_a_seen_b, has_everyone_whos_seen_a_seen_b_2) {
     var seen_nodes = {}
     var did_something = true
@@ -321,7 +330,6 @@ function sync9_wrap(x, vid) {
     } else throw 'bad'
 }
 
-
 function sync9_create_val() {
     return {
         t : 'val',
@@ -582,14 +590,6 @@ function sync9_diff_ODI(a, b) {
     return ret
 }
 
-function sync9_guid() {
-    var x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    var s = []
-    for (var i = 0; i < 15; i++)
-        s.push(x[Math.floor(Math.random() * x.length)])
-    return s.join('')
-}
-
 function sync9_create_proxy(x, cb, path) {
     path = path || ''
     var child_path = key => path + '[' + JSON.stringify(key) + ']'
@@ -786,4 +786,21 @@ function sync9_space_dag_prune(S, has_everyone_whos_seen_a_seen_b, seen_nodes) {
         }
     }, true)
     return did_something
+}
+
+binarySearch = function (ar, compare_fn) {
+    var m = 0;
+    var n = ar.length - 1;
+    while (m <= n) {
+        var k = (n + m) >> 1;
+        var cmp = compare_fn(ar[k]);
+        if (cmp > 0) {
+            m = k + 1;
+        } else if(cmp < 0) {
+            n = k - 1;
+        } else {
+            return k;
+        }
+    }
+    return m;
 }

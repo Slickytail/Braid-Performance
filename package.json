@@ -1,0 +1,13 @@
+{
+  "name": "Sync9-Test",
+  "version": "1.0.0",
+  "description": "Performance Tester",
+  "main": "harness.js",
+  "dependencies": {
+    "automerge": "^0.10.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Slickytail/Braid-Performance.git"
+  }
+}
