@@ -1,4 +1,5 @@
 module.exports = {run_trial: run_trial}
+var clone = require('clone')
 var sync9 = require("../local_modules/sync9")
 var tests = require("../local_modules/tests")
 var random = require("../local_modules/random")
@@ -20,6 +21,7 @@ function run_trial(dl) {
                 clients[uid].ack(vid)
             }, dl.d.LS)
         },
+        prune: () => dl.d.prune
     }, w.next().value.details.text)
     
     for (var cid of dl.client_ids) {
@@ -43,7 +45,8 @@ function run_trial(dl) {
                             server.ack(uid, vid)
                         }, dl.d.LS)
                     }
-                }
+                },
+                prune: () => dl.d.prune
             }, cid)
             clients[c.uid] = c
             
@@ -99,7 +102,7 @@ function create_client(s_funcs, uid) {
     }
     
     c.add_version = (vid, parents, changes) => {
-        if (Object.keys(c.delete_us).length > 0) {
+        if (Object.keys(c.delete_us).length > 0 && s_funcs.prune()) {
             var deleted = sync9.prune(c.s9, (a, b) => c.delete_us[b], (a, b) => c.delete_us[a])
             if (!Object.keys(c.delete_us).every(x => deleted[x])) throw 'wtf?'
             if (!Object.keys(deleted).every(x => c.delete_us[x])) throw 'wtf?'
@@ -156,8 +159,8 @@ function create_client(s_funcs, uid) {
     
     c.local_add_version = (changes) => {
         var x = {
-            vid : sync9.guid(),
-            parents : Object.assign({}, c.s9.leaves),
+            vid : random.guid(),
+            parents : clone(c.s9.leaves),
             changes : changes
         }
         sync9.add_version(c.s9, x.vid, c.s9.leaves, x.changes)
@@ -189,14 +192,15 @@ function create_server(c_funcs, s_text) {
     }
     
     function prune() {
+        if (!c_funcs.prune()) return
         var q = (a, b) => (a != 'root') && !s.s9.leaves[b] && Object.keys(s.prune_info[a].sent).every(x => s.prune_info[b].acked[x])
         
-        var clone = JSON.parse(JSON.stringify(s.s9))
-        var deleted = sync9.prune2(clone, q, q)
+        var s_clone = clone(s.s9)
+        var deleted = sync9.prune2(s_clone, q, q)
         
         while (Object.keys(deleted).length > 0) {
-            var clone = JSON.parse(JSON.stringify(s.s9))
-            var deleted2 = sync9.prune2(clone, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
+            var s_clone = clone(s.s9)
+            var deleted2 = sync9.prune2(s_clone, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
             
             if (Object.keys(deleted).some(x => !deleted2[x])) {
                 deleted = deleted2
@@ -204,6 +208,7 @@ function create_server(c_funcs, s_text) {
                 break
             }
         }
+        //console.log(`Had to try pruning ${ij} times`)
 
         var backup_parents = {}
         Object.keys(deleted).forEach(x => backup_parents[x] = s.s9.T[x])
@@ -283,7 +288,6 @@ function create_server(c_funcs, s_text) {
             var pi = s.prune_info[x]
             if (pi) pi.acked[uid] = true
         })
-        
         prune()
     }
     

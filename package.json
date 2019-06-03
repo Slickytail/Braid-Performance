@@ -4,7 +4,8 @@
   "description": "Performance Tester",
   "main": "harness.js",
   "dependencies": {
-    "automerge": "^0.10.1"
+    "automerge": "^0.10.1",
+    "clone": "^2.1.2"
   },
   "repository": {
     "type": "git",

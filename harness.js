@@ -1,8 +1,8 @@
 var automerge_network = require("./test_networks/automerge_network.js")
 var sync9_network = require("./test_networks/sync9_network.js")
 var random = require("./local_modules/random.js")
-
-function write_dialogue(seed, d) {
+const { PerformanceObserver, performance } = require('perf_hooks');
+function write_dialogue(d) {
     var last_seed = d.seed
     function rand() {
         random.seed('' + last_seed)
@@ -25,8 +25,9 @@ function write_dialogue(seed, d) {
             action: 'start',
             details: { text: starttext }
         }
+        console.log("Beginning initial fullsync")
         yield full_sync
-        
+        console.log("Finished initial fullsync")
         var t = 0
         var i = 0
         while (t < d.L) {
@@ -54,7 +55,9 @@ function write_dialogue(seed, d) {
             
         }
         // We've finished the dialogue, let's fullsync and then finish
+        console.log("Beginning final fullsync")
         yield full_sync
+        console.log("Finished final fullsync")
         return
         
     }
@@ -62,30 +65,45 @@ function write_dialogue(seed, d) {
     
 }
 
-function run_test(params) {
-    /*
-    var d = {seed: "iteration",
-             N : 200,     // Number of characters initially in document
-             m : 20,      // Average number of characters changed per edit
-             v : 5,       // Edit Window/2, ie edit size is uniformly distributed on the interval [m-v, m+v]
-             L : 100,     // Total number of edit lines in dialogue
-             EPS : 0.2,   // Probability of a client making an edit per-pass
-             LS : 2,      // Latency
-             prune: true, //
-             C: 10        // Number of clients
-            }
-    */
+exports.run_test = async (params) => {
+    var runtimes = {}
+    const obs = new PerformanceObserver((items) => {
+        var x = items.getEntries()[0]
+        runtimes[x.name] = x.duration
+        performance.clearMarks();
+    });
+    obs.observe({ entryTypes: ['measure'] })
     
     var dialogue = write_dialogue(params)
-    var s_am = performance.now()
+    /*performance.mark("AM_S")
     automerge_network.run_trial(dialogue)
-    var e_am = performance.now()
-    console.log(`${d.N},${d.m},${d.L},${d.EPS},${d.LS},${d.C},"Automerge",${(e_am-s_am)/1000}`)
+    performance.mark("AM_E")
+    performance.measure("Automerge", "AM_S", "AM_E")
     
-    var dialogue = write_dialogue(params)
-    var s_s9 = performance.now()
+    dialogue = write_dialogue(params)*/
+    performance.mark("S9_S")
     sync9_network.run_trial(dialogue)
-    var e_s9 = performance.now()
-    console.log(`${d.N},${d.m},${d.L},${d.EPS},${d.LS},${d.C},"Sync9",${(e_s9-s_s9)/1000}`)
+    performance.mark("S9_E")
+    performance.measure("Sync9", "S9_S", "S9_E")
+    const used = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(`Total Memory Usage: ${Math.round(used * 100) / 100} MB`);
+    obs.disconnect()
+    
+    return {
+        statusCode: 200,
+        body: JSON.stringify(runtimes)
+    }
     
 }
+
+var d = {"seed": "newseed",
+ "N" : 200,
+ "m" : 20,
+ "v" : 5,
+ "L" : 150,
+ "EPS" : 0.5,
+ "LS" : 6,
+ "prune": false,
+ "C": 20
+}
+console.log(exports.run_test(d))
