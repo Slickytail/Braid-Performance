@@ -1,21 +1,12 @@
 module.exports = {read: read_dialogue,
+                  fullsync: fullsync,
                   process_network: process_network,
                   good_check: good_check}
 
 function read_dialogue(writer, clients) {
     for (var line of writer) {
         if (line.action == 'sync') {
-            var i = 0
-            while (Object.values(clients).some(c => (c.incoming.length || c.outgoing.length))) {
-                i++
-                //console.log(`Sync #${i}---`)
-                Object.values(clients).forEach(c => {
-                    //console.log(`Client ${c.uid} has ${c.incoming.length} incoming and ${c.outgoing.length} outgoing`)
-                    process_network(c)
-                })
-                
-            }
-            //console.log(`Fullsync took ${i} iterations`)
+            fullsync(clients)
             continue
         }
         var c = clients[line.client]
@@ -27,6 +18,14 @@ function read_dialogue(writer, clients) {
     }
 }
 
+function fullsync(clients) {
+    while (Object.values(clients).some(c => (c.incoming.length || c.outgoing.length))) {
+        Object.values(clients).forEach(c => {
+            process_network(c)
+        })
+        
+    }
+}
 
 function process_network(c) {
     while (c.incoming.length > 0 && c.incoming[0].time == 0) {

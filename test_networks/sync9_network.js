@@ -3,7 +3,6 @@ var clone = require('clone')
 var sync9 = require("../local_modules/sync9")
 var tests = require("../local_modules/tests")
 var random = require("../local_modules/random")
-
 function run_trial(dl) {
 
     var n_clients = dl.d.C
@@ -58,12 +57,12 @@ function run_trial(dl) {
     })
     
     tests.read(w, clients)
-    
-    Object.values(clients).forEach(c => {
-        c.add_version(random.guid(), c.s9.leaves, [])
-    })
+    server.local_add_version('Vf', server.s9.leaves, [])
+    tests.fullsync(clients)
     
     tests.good_check([server].concat(Object.values(clients)))
+
+    console.log(server.read())
 }
 
 function create_client(s_funcs, uid) {
@@ -208,7 +207,6 @@ function create_server(c_funcs, s_text) {
                 break
             }
         }
-        //console.log(`Had to try pruning ${ij} times`)
 
         var backup_parents = {}
         Object.keys(deleted).forEach(x => backup_parents[x] = s.s9.T[x])
@@ -253,7 +251,19 @@ function create_server(c_funcs, s_text) {
             s.prune_info[x.vid].sent[uid] = true
         })
     }
-    
+    s.local_add_version = (vid, parents, changes) => {
+        if (s.s9.T[vid]) return
+        s.prune_info[vid] = {sent: {}, acked: {}}
+        
+        sync9.add_version(s.s9, vid, parents, changes)
+        Object.entries(s.peers).forEach(x => {
+            if (x[1].online) {
+                c_funcs.add_version(x[0], vid, parents, changes)
+                s.prune_info[vid].sent[x[0]] = true
+            }
+        })
+        
+    }
     s.add_version = (uid, vid, parents, changes) => {
         if (s.s9.T[vid]) return
         
@@ -288,7 +298,6 @@ function create_server(c_funcs, s_text) {
             var pi = s.prune_info[x]
             if (pi) pi.acked[uid] = true
         })
-        prune()
     }
     
     s.ack = (uid, vid) => {
@@ -298,7 +307,8 @@ function create_server(c_funcs, s_text) {
             return
         }
         s.prune_info[vid].acked[uid] = true
-        prune()
+        if (Object.keys(s.prune_info[vid].acked).length == Object.keys(s.prune_info[vid].sent).length)
+            prune()
     }
     
     s.leave = (uid) => {

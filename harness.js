@@ -2,6 +2,7 @@ var automerge_network = require("./test_networks/automerge_network.js")
 var sync9_network = require("./test_networks/sync9_network.js")
 var random = require("./local_modules/random.js")
 const { PerformanceObserver, performance } = require('perf_hooks');
+
 function write_dialogue(d) {
     var last_seed = d.seed
     function rand() {
@@ -12,7 +13,7 @@ function write_dialogue(d) {
         return Array(n).fill(0) // array of zeroes of length N
     }
     const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    var clients = Z(d.C).map(() => random.guid())
+    var clients = Z(d.C).map(() => "CL_"+random.guid())
     function* writer() {
         var starttext = Z(d.N).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
         const full_sync = {
@@ -65,7 +66,7 @@ function write_dialogue(d) {
     
 }
 
-exports.run_test = async (params) => {
+exports.run_test = (params) => {
     var runtimes = {}
     const obs = new PerformanceObserver((items) => {
         var x = items.getEntries()[0]
@@ -74,13 +75,13 @@ exports.run_test = async (params) => {
     });
     obs.observe({ entryTypes: ['measure'] })
     
-    var dialogue = write_dialogue(params)
-    /*performance.mark("AM_S")
+    /*var dialogue = write_dialogue(params)
+    performance.mark("AM_S")
     automerge_network.run_trial(dialogue)
     performance.mark("AM_E")
-    performance.measure("Automerge", "AM_S", "AM_E")
+    performance.measure("Automerge", "AM_S", "AM_E")*/
     
-    dialogue = write_dialogue(params)*/
+    var dialogue = write_dialogue(params)
     performance.mark("S9_S")
     sync9_network.run_trial(dialogue)
     performance.mark("S9_E")
@@ -88,7 +89,6 @@ exports.run_test = async (params) => {
     const used = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`Total Memory Usage: ${Math.round(used * 100) / 100} MB`);
     obs.disconnect()
-    
     return {
         statusCode: 200,
         body: JSON.stringify(runtimes)
@@ -97,13 +97,13 @@ exports.run_test = async (params) => {
 }
 
 var d = {"seed": "newseed",
- "N" : 200,
- "m" : 20,
+ "N" : 100,
+ "m" : 10,
  "v" : 5,
- "L" : 150,
- "EPS" : 0.5,
- "LS" : 6,
- "prune": false,
- "C": 20
+ "L" : 50,
+ "EPS" : 0.2,
+ "LS" : 5,
+ "prune": true,
+ "C": 10
 }
 console.log(exports.run_test(d))

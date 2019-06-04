@@ -19,10 +19,14 @@ function seed(seed) {
     return t.random()
   }
 }
-function guid() {
+
+function guid(len) {
     var x = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
     var s = []
-    for (var i = 0; i < 15; i++)
+    var nchars = 10
+    if (len)
+        nchars = len
+    for (var i = 0; i < nchars; i++)
         s.push(x[Math.floor(Math.random() * x.length)])
     return s.join('')
 }

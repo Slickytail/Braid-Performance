@@ -5,6 +5,8 @@ module.exports = {create: sync9_create,
                   extract_versions: sync9_extract_versions,
                   prune: sync9_prune,
                   prune2: sync9_prune2,
+                  trav_space_dag: sync9_trav_space_dag,
+                  get_space_dag: sync9_space_dag_get
 }
 
 function sync9_prune2(x, has_everyone_whos_seen_a_seen_b, has_everyone_whos_seen_a_seen_b_2) {
