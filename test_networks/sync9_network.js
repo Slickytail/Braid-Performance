@@ -1,9 +1,24 @@
 module.exports = {run_trial: run_trial}
 var clone = require('clone')
+var sizeof = require('object-sizeof')
 var sync9 = require("../local_modules/sync9")
 var tests = require("../local_modules/tests")
 var random = require("../local_modules/random")
+const { PerformanceObserver, performance } = require('perf_hooks');
+var debug_data = {
+    total_prunes: 0,
+    initial_prunes: 0,
+    good_prunes: 0,
+    nodes_pruned: 0
+}
+
 function run_trial(dl) {
+    debug_data = {
+        total_prunes: 0,
+        initial_prunes: 0,
+        good_prunes: 0,
+        nodes_pruned: 0
+    }
 
     var n_clients = dl.d.C
     var clients = {}
@@ -19,9 +34,13 @@ function run_trial(dl) {
             clients[uid].add_incoming(() => {
                 clients[uid].ack(vid)
             }, dl.d.LS)
-        },
-        prune: () => dl.d.prune
-    }, w.next().value.details.text)
+        }
+    }, w.next().value.details.text,
+    {
+        prune: dl.d.prune,
+        prune_freq: dl.d.prune_freq
+    }
+     )
     
     for (var cid of dl.client_ids) {
         ;(() => {
@@ -44,8 +63,7 @@ function run_trial(dl) {
                             server.ack(uid, vid)
                         }, dl.d.LS)
                     }
-                },
-                prune: () => dl.d.prune
+                }
             }, cid)
             clients[c.uid] = c
             
@@ -56,13 +74,17 @@ function run_trial(dl) {
         c.join()
     })
     
-    tests.read(w, clients)
+    tests.read(w, clients, (l) => {
+        if (l % 100) return
+        server_size = Math.round(sizeof(server)/1024)
+        client_size = Math.round(Object.values(clients).map(c => sizeof(c)).reduce((a, b) => a+b) / 1024)
+        console.log(`Sync9 (${dl.d.tag}) Line ${l}: ${server_size} KB Server / ${client_size} KB Clients`)
+    })
     server.local_add_version('Vf', server.s9.leaves, [])
     tests.fullsync(clients)
     
     tests.good_check([server].concat(Object.values(clients)))
-
-    console.log(server.read())
+    console.error(debug_data)
 }
 
 function create_client(s_funcs, uid) {
@@ -101,7 +123,7 @@ function create_client(s_funcs, uid) {
     }
     
     c.add_version = (vid, parents, changes) => {
-        if (Object.keys(c.delete_us).length > 0 && s_funcs.prune()) {
+        if (Object.keys(c.delete_us).length > 0) {
             var deleted = sync9.prune(c.s9, (a, b) => c.delete_us[b], (a, b) => c.delete_us[a])
             if (!Object.keys(c.delete_us).every(x => deleted[x])) throw 'wtf?'
             if (!Object.keys(deleted).every(x => c.delete_us[x])) throw 'wtf?'
@@ -178,7 +200,7 @@ function create_client(s_funcs, uid) {
     return c
 }
 
-function create_server(c_funcs, s_text) {
+function create_server(c_funcs, s_text, config) {
     var s = {}
     
     s.s9 = sync9.create()
@@ -189,13 +211,23 @@ function create_server(c_funcs, s_text) {
         root: {sent: {}, acked: {}},
         v1: {sent: {}, acked: {}}
     }
+    s.config = config
+    s.p_counter = 0
     
     function prune() {
-        if (!c_funcs.prune()) return
+        if (!s.config.prune) return
+        s.p_counter = (s.p_counter + 1) % s.config.prune_freq
+        if (s.p_counter) return
+        
+        debug_data.total_prunes++
         var q = (a, b) => (a != 'root') && !s.s9.leaves[b] && Object.keys(s.prune_info[a].sent).every(x => s.prune_info[b].acked[x])
         
         var s_clone = clone(s.s9)
         var deleted = sync9.prune2(s_clone, q, q)
+        
+        if (Object.keys(deleted).length == 0)
+            return
+        debug_data.initial_prunes++
         
         while (Object.keys(deleted).length > 0) {
             var s_clone = clone(s.s9)
@@ -216,7 +248,10 @@ function create_server(c_funcs, s_text) {
         if (Object.keys(deleted).some(x => !deleted2[x]) || Object.keys(deleted2).some(x => !deleted[x])) {
             throw 'wtf?'
         }
+        if (Object.keys(deleted).length == 0)
+            return
         
+        debug_data.good_prunes++
         Object.keys(deleted).forEach(deleted => {
             Object.entries(s.peers).forEach(x => {
                 if (s.prune_info[deleted].sent[x[0]]) {
@@ -226,6 +261,7 @@ function create_server(c_funcs, s_text) {
                     c_funcs.ack(x[0], deleted)
                 }
             })
+            debug_data.nodes_pruned++
             delete s.prune_info[deleted]
         })
     }
@@ -307,8 +343,9 @@ function create_server(c_funcs, s_text) {
             return
         }
         s.prune_info[vid].acked[uid] = true
-        if (Object.keys(s.prune_info[vid].acked).length == Object.keys(s.prune_info[vid].sent).length)
+        if (Object.keys(s.prune_info[vid].acked).length == Object.keys(s.prune_info[vid].sent).length) 
             prune()
+        
     }
     
     s.leave = (uid) => {

@@ -26,9 +26,7 @@ function write_dialogue(d) {
             action: 'start',
             details: { text: starttext }
         }
-        console.log("Beginning initial fullsync")
         yield full_sync
-        console.log("Finished initial fullsync")
         var t = 0
         var i = 0
         while (t < d.L) {
@@ -56,9 +54,7 @@ function write_dialogue(d) {
             
         }
         // We've finished the dialogue, let's fullsync and then finish
-        console.log("Beginning final fullsync")
         yield full_sync
-        console.log("Finished final fullsync")
         return
         
     }
@@ -75,20 +71,20 @@ exports.run_test = (params) => {
     });
     obs.observe({ entryTypes: ['measure'] })
     
-    /*var dialogue = write_dialogue(params)
+    var dialogue = write_dialogue(params)
     performance.mark("AM_S")
     automerge_network.run_trial(dialogue)
     performance.mark("AM_E")
-    performance.measure("Automerge", "AM_S", "AM_E")*/
+    performance.measure("Automerge", "AM_S", "AM_E")
     
     var dialogue = write_dialogue(params)
     performance.mark("S9_S")
     sync9_network.run_trial(dialogue)
     performance.mark("S9_E")
-    performance.measure("Sync9", "S9_S", "S9_E")
-    const used = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(`Total Memory Usage: ${Math.round(used * 100) / 100} MB`);
+    performance.measure(`Sync9 (${params.tag})`, "S9_S", "S9_E")
     obs.disconnect()
+    
+    console.error(runtimes)
     return {
         statusCode: 200,
         body: JSON.stringify(runtimes)
@@ -97,13 +93,18 @@ exports.run_test = (params) => {
 }
 
 var d = {"seed": "newseed",
- "N" : 100,
- "m" : 10,
- "v" : 5,
- "L" : 50,
+ "N" : 200,
+ "m" : 20,
+ "v" : 10,
+ "L" : 500,
  "EPS" : 0.2,
  "LS" : 5,
+ "C": 20,
  "prune": true,
- "C": 10
+ "prune_freq": 10,
+ "tag": "prune sparse (10)"
 }
-console.log(exports.run_test(d))
+
+exports.run_test(d)
+
+

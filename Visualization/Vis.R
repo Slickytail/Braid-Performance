@@ -1,8 +1,0 @@
-library(tidyverse)
-time.data <- read_csv("fixed-latency-2.csv",
-                      col_types="iiidiicd")
-time.data %>%
-ggplot(data = ., aes(x=latency, y=time/clients, color=algorithm)) + theme_bw() + 
-  geom_point() + facet_grid(cols=vars(eps), rows=vars(clients)) +
-  labs(title="Running time depending on number of clients and edit frequency", caption="150 lines of dialogue",
-       y="Seconds per client", x="Client-to-server Latency (Ticks)")

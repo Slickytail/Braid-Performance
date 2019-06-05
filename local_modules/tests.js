@@ -3,10 +3,11 @@ module.exports = {read: read_dialogue,
                   process_network: process_network,
                   good_check: good_check}
 
-function read_dialogue(writer, clients) {
+function read_dialogue(writer, clients, tick) {
+    var l = 0
     for (var line of writer) {
         if (line.action == 'sync') {
-            fullsync(clients)
+            fullsync(clients, tick)
             continue
         }
         var c = clients[line.client]
@@ -15,6 +16,7 @@ function read_dialogue(writer, clients) {
         } else if (line.action == 'net') {
             process_network(c)
         }
+        tick(l++)
     }
 }
 
@@ -22,6 +24,7 @@ function fullsync(clients) {
     while (Object.values(clients).some(c => (c.incoming.length || c.outgoing.length))) {
         Object.values(clients).forEach(c => {
             process_network(c)
+            
         })
         
     }

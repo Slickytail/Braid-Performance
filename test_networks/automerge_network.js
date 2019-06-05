@@ -1,5 +1,6 @@
 module.exports = {run_trial: run_trial}
 var Automerge = require("automerge")
+var sizeof = require('object-sizeof')
 var tests = require("../local_modules/tests")
 
 function run_trial(dl) {
@@ -43,7 +44,12 @@ function run_trial(dl) {
         c.join()
     })
         
-    tests.read(w, clients)
+    tests.read(w, clients, (l) => {
+        if (l % 100) return
+        server_size = Math.round(sizeof(server)/1024)
+        client_size = Math.round(Object.values(clients).map(c => sizeof(c)).reduce((a, b) => a+b) / 1024)
+        console.log(`Automerge Line ${l}: ${server_size} KB Server / ${client_size} KB Clients`)
+    })
     
     tests.good_check([server].concat(Object.values(clients)))
     

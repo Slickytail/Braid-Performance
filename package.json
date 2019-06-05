@@ -5,7 +5,8 @@
   "main": "harness.js",
   "dependencies": {
     "automerge": "^0.10.1",
-    "clone": "^2.1.2"
+    "clone": "^2.1.2",
+    "object-sizeof": "^1.4.0"
   },
   "repository": {
     "type": "git",
