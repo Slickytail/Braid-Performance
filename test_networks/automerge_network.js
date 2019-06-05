@@ -43,13 +43,15 @@ function run_trial(dl) {
         c.state = 'connected'
         c.join()
     })
-        
-    tests.read(w, clients, (l) => {
-        if (l % 100) return
-        server_size = Math.round(sizeof(server)/1024)
-        client_size = Math.round(Object.values(clients).map(c => sizeof(c)).reduce((a, b) => a+b) / 1024)
-        console.log(`Automerge Line ${l}: ${server_size} KB Server / ${client_size} KB Clients`)
-    })
+    var l = 0;
+    var tick = () => {
+        l++
+        if (l % 5) return
+        server_size = tests.format_byte(sizeof(server))
+        client_size = tests.format_byte(sizeof(clients))
+        console.log(`[Automerge] Time ${l}: ${server_size} Server / ${client_size} Clients`)
+    }
+    tests.read(w, clients, tick)
     
     tests.good_check([server].concat(Object.values(clients)))
     

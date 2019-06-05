@@ -27,15 +27,21 @@ function write_dialogue(d) {
             details: { text: starttext }
         }
         yield full_sync
-        var t = 0
-        var i = 0
-        while (t < d.L) {
-            i = (i+1) % d.C
-            var c = clients[i] // The UID of the acting client
+        var total_edits = 0
+        var client_num = 0
+        var edit_counter = 0
+        var next_client = 0
+        d.period = 1/d.EPS
+        while (total_edits < d.L) {
+            client_num = (client_num+1) % d.C
+            var c = clients[client_num] // The UID of the acting client
             var line = { client : c }
-            if (rand() < d.EPS) {
-                // This is an edit line
-                line.action = 'edit'
+            edit_counter = (edit_counter + 1) % d.period
+            if (edit_counter < 1) {
+                // next_client makes an edit
+                var ce = clients[next_client]
+                var eline = { client: ce }
+                eline.action = 'edit'
                 var del_length = Math.floor(d.m + (2*rand() - 1) * d.v)
                 var start = rand()
                 
@@ -43,10 +49,14 @@ function write_dialogue(d) {
                 var ins = ""
                 if (ins_length > 0)
                     ins = Z(ins_length).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
-                line.details = {start: start, len: del_length, ins: ins}
-                t++
-                yield line
+                eline.details = {start: start, len: del_length, ins: ins}
+                total_edits++
+                next_client = (next_client + 1) % d.C
+                
+                yield eline
             }
+            if (client_num == 0)
+                yield {action: "tick"}
             // Network checkin
             line.action = 'net'
             line.details = {}
@@ -54,6 +64,7 @@ function write_dialogue(d) {
             
         }
         // We've finished the dialogue, let's fullsync and then finish
+        console.log("Fullsyncing")
         yield full_sync
         return
         
@@ -71,11 +82,11 @@ exports.run_test = (params) => {
     });
     obs.observe({ entryTypes: ['measure'] })
     
-    var dialogue = write_dialogue(params)
+    /*var dialogue = write_dialogue(params)
     performance.mark("AM_S")
     automerge_network.run_trial(dialogue)
     performance.mark("AM_E")
-    performance.measure("Automerge", "AM_S", "AM_E")
+    performance.measure("Automerge", "AM_S", "AM_E")*/
     
     var dialogue = write_dialogue(params)
     performance.mark("S9_S")
@@ -96,13 +107,22 @@ var d = {"seed": "newseed",
  "N" : 200,
  "m" : 20,
  "v" : 10,
- "L" : 500,
- "EPS" : 0.2,
- "LS" : 5,
+ "L" : 3000,
+ "EPS" : 0.45,
+ "LS" : 10,
  "C": 20,
  "prune": true,
  "prune_freq": 10,
- "tag": "prune sparse (10)"
+ "tag": ""
+}
+if (d.prune) {
+    if (d.prune_freq == 1)
+        d.tag = "full prune"
+    else
+        d.tag += `prune 1/${d.prune_freq}`
+    
+} else {
+    d.tag = "no prune"
 }
 
 exports.run_test(d)

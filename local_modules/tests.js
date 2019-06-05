@@ -1,14 +1,17 @@
 module.exports = {read: read_dialogue,
                   fullsync: fullsync,
                   process_network: process_network,
-                  good_check: good_check}
+                  good_check: good_check,
+                  format_byte: format_bytes}
 
 function read_dialogue(writer, clients, tick) {
-    var l = 0
     for (var line of writer) {
         if (line.action == 'sync') {
             fullsync(clients, tick)
             continue
+        }
+        if (line.action == 'tick') {
+            if (tick) tick()
         }
         var c = clients[line.client]
         if (line.action == 'edit') {
@@ -16,17 +19,17 @@ function read_dialogue(writer, clients, tick) {
         } else if (line.action == 'net') {
             process_network(c)
         }
-        tick(l++)
+        
     }
 }
 
-function fullsync(clients) {
+function fullsync(clients, tick) {
     while (Object.values(clients).some(c => (c.incoming.length || c.outgoing.length))) {
         Object.values(clients).forEach(c => {
             process_network(c)
             
         })
-        
+        if (tick) tick()
     }
 }
 
@@ -62,4 +65,15 @@ function good_check(nodes) {
         console.log('CHECK GOOD: ' + check_good)
         throw 'Clients desynced'
     }
+}
+
+function format_bytes(n) {
+    if (n < 1024)
+        return `${n} B`
+    if (n < (1024 * 1024))
+        return `${(n / 1024).toFixed(1)} KB`
+    if (n < (1024 * 1024 * 1024))
+        return `${(n / 1024 / 1024).toFixed(1)} MB`
+    if (n < (1024 * 1024 * 1024 * 1024))
+        return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
