@@ -16,13 +16,8 @@ function write_dialogue(d) {
     var clients = Z(d.C).map(() => "CL_"+random.guid())
     function* writer() {
         var starttext = Z(d.N).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
-        const full_sync = {
-            client: 'all',
-            action: 'sync',
-            details: {}
-        }
+        const full_sync = { action: 'sync' }
         yield {
-            client: 'server', // Server doesn't have a UID
             action: 'start',
             details: { text: starttext }
         }
@@ -33,9 +28,15 @@ function write_dialogue(d) {
         var next_client = 0
         d.period = 1/d.EPS
         while (total_edits < d.L) {
-            client_num = (client_num+1) % d.C
-            var c = clients[client_num] // The UID of the acting client
+            if (client_num == 0)
+                yield {action: "tick"}
+            
+            var c = clients[client_num]
             var line = { client : c }
+            line.action = 'net'
+            yield line
+            client_num = (client_num+1) % d.C
+            
             edit_counter = (edit_counter + 1) % d.period
             if (edit_counter < 1) {
                 // next_client makes an edit
@@ -55,12 +56,6 @@ function write_dialogue(d) {
                 
                 yield eline
             }
-            if (client_num == 0)
-                yield {action: "tick"}
-            // Network checkin
-            line.action = 'net'
-            line.details = {}
-            yield line
             
         }
         // We've finished the dialogue, let's fullsync and then finish
