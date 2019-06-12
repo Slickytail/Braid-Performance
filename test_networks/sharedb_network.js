@@ -20,9 +20,7 @@ function run_trial(dl, finished) {
         })()
     }
     function ready() {
-        Object.values(clients)[0].noedit= true
         tests.read(dl.w, clients, null, () => {
-            console.log("Good Check")
             tests.good_check([server].concat(Object.values(clients)), () => {
                 server.wss.close()
                 server.share.close(finished)
@@ -30,14 +28,15 @@ function run_trial(dl, finished) {
         })
 
     }
-    setTimeout(ready, 0)
+    setTimeout(ready, 10)
 }
 
 function create_client(config, uid) {
     var c = {}
     
+    c.ready = false
     c.messages = []
-    c.has_messages = () => c.messages.length > 0
+    c.has_messages = () => (c.messages.length > 0 || !c.ready)
     c.buffers = ["messages"]
     c.connected = false
     c.uid = uid
@@ -46,8 +45,7 @@ function create_client(config, uid) {
         
         wsc._emit = wsc.emit
         wsc.emit = function(...args) {
-            console.log(`Connection for client ${uid} storing ${args[0]}`);
-            var onprocess = () => {console.log(`Connection for client ${uid} emitting ${args[0]}`); this._emit(...args);}
+            var onprocess = () => {this._emit(...args);}
             onprocess.time = config.LS
             onprocess.type = args[0]
             c.messages.push(onprocess)
@@ -55,17 +53,16 @@ function create_client(config, uid) {
         var connection = new ShareDBClient.Connection(wsc)
         
         c.doc = connection.get('network', 'edit')
-        c.doc.subscribe(() => {console.log("Subscribe finished")})
+        c.doc.subscribe(() => {c.ready = true})
     }
     c.read = () => {
-        return c.doc.data.text
+        if (c.doc.data) return c.doc.data.text
+        return ""
     }
-    c.change_frac = (start, len, ins) => {
-        var start_index = Math.floor(start * c.doc.data.text.length)
-        var delete_text = c.doc.data.text.substring(start_index, start_index + len)
-        console.log(`Client ${uid} has Body: ${c.doc.data.text}`)
-        if (!c.noedit)
-            c.doc.submitOp([{p: ['text', start_index], sd: delete_text},
+    c.change_frac = (start, ins) => {
+        var start_index = Math.floor(start * c.read().length)
+        var delete_text = c.doc.data.text.substring(start_index, start_index + ins.length)
+        c.doc.submitOp([{p: ['text', start_index], sd: delete_text},
                         {p: ['text', start_index], si: ins}]);
     }
     connect()

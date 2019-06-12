@@ -44,11 +44,11 @@ function write_dialogue(d) {
                 var ce = clients[next_client]
                 var eline = { client: ce }
                 eline.action = 'edit'
-                var del_length = Math.floor(d.m + (2*rand() - 1) * d.v)
+                var edit_length = Math.floor(d.m + (2*rand() - 1) * d.v)
                 var start = rand()
                 
-                ins = Z(del_length).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
-                eline.details = {start: start, len: del_length, ins: ins}
+                ins = Z(edit_length).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
+                eline.details = {start: start, ins: ins}
                 total_edits++
                 next_client = (next_client + 1) % d.C
                 
@@ -67,29 +67,38 @@ function write_dialogue(d) {
 
 exports.run_test = (params) => {
     var runtimes = {}
-    const obs = new PerformanceObserver((items) => {
-        var x = items.getEntries()[0]
-        runtimes[x.name] = x.duration
+    const n_tests = 3
+    const obs = new PerformanceObserver((items, observer) => {
+        items.getEntries().forEach(x => runtimes[x.name] = x.duration)
         performance.clearMarks();
+        if (Object.keys(runtimes).length == n_tests) {
+            observer.disconnect()
+            console.error("[Timing]", runtimes)
+        }
     });
-    obs.observe({ entryTypes: ['measure'] })
+    obs.observe({ entryTypes: ['measure'], buffered: true})
     
-    /*var dialogue = write_dialogue(params)
-    performance.mark("AM_S")
-    automerge_network.run_trial(dialogue)
-    performance.mark("AM_E")
-    performance.measure("Automerge", "AM_S", "AM_E")
-    
-    var dialogue = write_dialogue(params)
-    performance.mark("S9_S")
-    sync9_network.run_trial(dialogue, () => {
-        performance.mark("S9_E")
-        performance.measure(`Sync9 (${params.tag})`, "S9_S", "S9_E")
-        obs.disconnect()
-        console.error(runtimes)
-    })*/
-    
-    setTimeout(() => {
+    function automerge() {
+        var dialogue = write_dialogue(params)
+        performance.mark("AM_S")
+        automerge_network.run_trial(dialogue, () => {
+            performance.mark("AM_E")
+            performance.measure("Automerge", "AM_S", "AM_E")
+            setImmediate(sync9)
+            
+        })
+    }
+    function sync9() {
+        var dialogue = write_dialogue(params)
+        performance.mark("S9_S")
+        sync9_network.run_trial(dialogue, () => {
+            performance.mark("S9_E")
+            performance.measure(`Sync9 (${params.tag})`, "S9_S", "S9_E")
+            setImmediate(sharedb)
+            
+        })
+    }
+    function sharedb() {
         var dialogue = write_dialogue(params)
         performance.mark("SDB_S")
         sharedb_network.run_trial(dialogue, () => {
@@ -97,7 +106,8 @@ exports.run_test = (params) => {
             performance.measure(`ShareDB`, "SDB_S", "SDB_E")
             
         })
-    }, 100)
+    }
+    automerge()
     
     return {
         statusCode: 200,
@@ -106,18 +116,18 @@ exports.run_test = (params) => {
     
 }
 
-var d = {"seed": "newseed",
- "N" : 10,
- "m" : 5,
- "v" : 3,
- "L" : 50,
- "EPS" : 0.2,
- "LS" : 0,
- "C": 3,
+var d = {"seed": "seeddd",
+ "N" : 200,
+ "m" : 10,
+ "v" : 2,
+ "L" : 200,
+ "EPS" : 0.5,
+ "LS" : 5,
+ "C": 10,
  "prune": true,
- "prune_freq": 5,
+ "prune_freq": 10,
  "tag": "",
- "debug": true
+ "debug": false
 }
 if (d.prune) {
     if (d.prune_freq == 1)

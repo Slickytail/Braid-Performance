@@ -72,13 +72,6 @@ function run_trial(dl, finished) {
     var debug_frames = []
     var tick = (state) => {
         if (!dl.d.debug) return
-        
-        server_size = tests.format_byte(sizeof(server))
-        unacked_size = tests.format_byte(sizeof(server.peers))
-        dag_size = tests.format_byte(sizeof(server.s9))
-        prune_info_size = tests.format_byte(sizeof(server.prune_info))
-        console.error(`[Sync9 (${dl.d.tag}, ${state})] t=${l}: ` +
-                    `Server: ${server_size} (${dag_size} S9, ${prune_info_size} Hist, ${unacked_size} Delete)`)
         var frame = {}
         frame.server_s9 = server.s9
         frame.client_s9s = Object.values(clients).map(c => c.s9)
@@ -87,16 +80,21 @@ function run_trial(dl, finished) {
         
     }
     
-    tests.read(w, clients, tick, () => {
+    tests.read(w, clients, tick, async () => {
+        // Add two merge-points, this allows the spacetree to be FULLY pruned
+        tick("Finished reading")
         server.local_add_version('Vf0', clone(server.s9.leaves), [])
+        tick("Added Vf0")
         server.local_add_version('Vf1', clone(server.s9.leaves), [])
-        tests.fullsync(clients, tick)
+        tick("Added Vf1")
+        
+        await tests.fullsync(clients, tick)
         server._force_prune()
-        tests.fullsync(clients, tick)
+        await tests.fullsync(clients, tick)
         Object.values(clients).forEach(c => c.prune())
         
         tests.good_check([server].concat(Object.values(clients)))
-        console.error(debug_data)
+        console.error("[Sync9]", debug_data)
         
         tick("Finished")
         if (dl.d.debug)
@@ -104,6 +102,7 @@ function run_trial(dl, finished) {
         
         if (finished)
             finished()
+
     })
     
 }
@@ -219,9 +218,9 @@ function create_client(s_funcs, uid) {
         return x
     }
     c.read = () => sync9.read(c.s9)
-    c.change_frac = (start, len, ins) => {
+    c.change_frac = (start, ins) => {
         var s = Math.floor(c.read().length * start)
-        var changes = [`[${s}:${s + len}] = ` + JSON.stringify(ins)]
+        var changes = [`[${s}:${s + ins.length}] = ` + JSON.stringify(ins)]
         c.local_add_version(changes)
         
     }

@@ -3,7 +3,7 @@ var Automerge = require("automerge")
 var sizeof = require('object-sizeof')
 var tests = require("../local_modules/tests")
 
-function run_trial(dl) {
+function run_trial(dl, finished) {
 
     var n_clients = dl.d.C
     var clients = {}
@@ -44,14 +44,9 @@ function run_trial(dl) {
         c.join()
     })
     var l = 0;
-    var tick = () => {
-        if (l++ % 10) return
-        server_size = tests.format_byte(sizeof(server))
-        client_size = tests.format_byte(sizeof(clients))
-        console.log(`[Automerge] Time ${l}: ${server_size} Server / ${client_size} Clients`)
-    }
-    tests.read(w, clients, tick, () => {
+    tests.read(w, clients, null, () => {
         tests.good_check([server].concat(Object.values(clients)))
+        if (finished) finished()
     })
     
     
@@ -92,10 +87,11 @@ function create_client(s_funcs, uid) {
     }
     
     c.read = () => c.a.text.join('')
-    c.change_frac = (start, len, ins) => {
+    c.change_frac = (start, ins) => {
         var oldDoc = c.a
         c.a = Automerge.change(c.a, doc => {
             l = doc.text.length
+            var len = ins.length
             start = Math.floor((l - (len % l) - 1) * start)
             for (var i = 0; i < len; i++) {
                 
