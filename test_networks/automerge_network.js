@@ -45,15 +45,16 @@ function run_trial(dl) {
     })
     var l = 0;
     var tick = () => {
-        l++
-        if (l % 5) return
+        if (l++ % 10) return
         server_size = tests.format_byte(sizeof(server))
         client_size = tests.format_byte(sizeof(clients))
         console.log(`[Automerge] Time ${l}: ${server_size} Server / ${client_size} Clients`)
     }
-    tests.read(w, clients, tick)
+    tests.read(w, clients, tick, () => {
+        tests.good_check([server].concat(Object.values(clients)))
+    })
     
-    tests.good_check([server].concat(Object.values(clients)))
+    
     
 }
 
@@ -76,6 +77,9 @@ function create_client(s_funcs, uid) {
         f.time = l
         c.outgoing.push(f)
     }
+    c.has_messages = () => c.incoming.length || c.outgoing.length
+    c.buffers = ["incoming", "outgoing"]
+    
     
     c.a = Automerge.init(c.uid)
     c.add_version = (changes) => {

@@ -12,7 +12,7 @@ var debug_data = {
     nodes_pruned: 0
 }
 
-function run_trial(dl) {
+function run_trial(dl, finished) {
     var n_clients = dl.d.C
     var clients = {}
     var w = dl.w
@@ -69,23 +69,43 @@ function run_trial(dl) {
         c.join()
     })
     var l = 0;
-    var tick = () => {
-        l++
+    var debug_frames = []
+    var tick = (state) => {
+        if (!dl.d.debug) return
+        
         server_size = tests.format_byte(sizeof(server))
         unacked_size = tests.format_byte(sizeof(server.peers))
         dag_size = tests.format_byte(sizeof(server.s9))
         prune_info_size = tests.format_byte(sizeof(server.prune_info))
-        console.log(`[Sync9 (${dl.d.tag})] t=${l}: ` +
+        console.error(`[Sync9 (${dl.d.tag}, ${state})] t=${l}: ` +
                     `Server: ${server_size} (${dag_size} S9, ${prune_info_size} Hist, ${unacked_size} Delete)`)
+        var frame = {}
+        frame.server_s9 = server.s9
+        frame.client_s9s = Object.values(clients).map(c => c.s9)
+        frame.tag = state
+        debug_frames.push(clone(frame))
+        
     }
     
-    tests.read(w, clients)
-    server.local_add_version('Vf', server.s9.leaves, [])
-    console.log("Adding server version")
-    tests.fullsync(clients, tick)
+    tests.read(w, clients, tick, () => {
+        server.local_add_version('Vf0', clone(server.s9.leaves), [])
+        server.local_add_version('Vf1', clone(server.s9.leaves), [])
+        tests.fullsync(clients, tick)
+        server._force_prune()
+        tests.fullsync(clients, tick)
+        Object.values(clients).forEach(c => c.prune())
+        
+        tests.good_check([server].concat(Object.values(clients)))
+        console.error(debug_data)
+        
+        tick("Finished")
+        if (dl.d.debug)
+            console.log(`var debug_frames = ${JSON.stringify(debug_frames)};`);
+        
+        if (finished)
+            finished()
+    })
     
-    tests.good_check([server].concat(Object.values(clients)))
-    console.error(debug_data)
 }
 
 function create_client(s_funcs, uid) {
@@ -122,14 +142,20 @@ function create_client(s_funcs, uid) {
         f.time = l
         c.outgoing.push(f)
     }
+    c.has_messages = () => c.incoming.length || c.outgoing.length
+    c.buffers = ["incoming", "outgoing"]
     
-    c.add_version = (vid, parents, changes) => {
+    c.prune = () => {
         if (Object.keys(c.delete_us).length > 0) {
             var deleted = sync9.prune(c.s9, (a, b) => c.delete_us[b], (a, b) => c.delete_us[a])
             if (!Object.keys(c.delete_us).every(x => deleted[x])) throw 'wtf?'
             if (!Object.keys(deleted).every(x => c.delete_us[x])) throw 'wtf?'
             c.delete_us = {}
         }
+        
+    }
+    c.add_version = (vid, parents, changes) => {
+        c.prune()
         
         Object.keys(parents).forEach(p => {
             delete c.server_leaves[p]
@@ -185,7 +211,7 @@ function create_client(s_funcs, uid) {
             parents : clone(c.s9.leaves),
             changes : changes
         }
-        sync9.add_version(c.s9, x.vid, c.s9.leaves, x.changes)
+        sync9.add_version(c.s9, x.vid, x.parents, x.changes)
         if (c.got_first_version) {
             c.unacked.push(x)
             s_funcs.add_version(c.uid, x.vid, x.parents, x.changes)
@@ -197,6 +223,7 @@ function create_client(s_funcs, uid) {
         var s = Math.floor(c.read().length * start)
         var changes = [`[${s}:${s + len}] = ` + JSON.stringify(ins)]
         c.local_add_version(changes)
+        
     }
     return c
 }
@@ -214,11 +241,10 @@ function create_server(c_funcs, s_text, config) {
     }
     s.config = config
     s.p_counter = 0
+    s._force_prune = prune
     
     function prune() {
-        s.p_counter = (s.p_counter + 1) % s.config.prune_freq
-        if (s.p_counter) return
-        
+        if (!s.config.prune) return
         debug_data.total_prunes++
         var q = (a, b) => (a != 'root') && !s.s9.leaves[b] && Object.keys(s.prune_info[a].sent).every(x => s.prune_info[b].acked[x])
         
@@ -239,17 +265,17 @@ function create_server(c_funcs, s_text, config) {
                 break
             }
         }
+        if (Object.keys(deleted).length == 0)
+            return
 
         var backup_parents = {}
         Object.keys(deleted).forEach(x => backup_parents[x] = s.s9.T[x])
-
+        
         var deleted2 = sync9.prune2(s.s9, (a, b) => q(a, b) && deleted[b], (a, b) => q(a, b) && deleted[a])
         
         if (Object.keys(deleted).some(x => !deleted2[x]) || Object.keys(deleted2).some(x => !deleted[x])) {
             throw 'wtf?'
         }
-        if (Object.keys(deleted).length == 0)
-            return
         
         debug_data.good_prunes++
         debug_data.nodes_pruned += Object.keys(deleted).length
@@ -290,7 +316,6 @@ function create_server(c_funcs, s_text, config) {
     s.local_add_version = (vid, parents, changes) => {
         if (s.s9.T[vid]) return
         if (s.config.prune) s.prune_info[vid] = {sent: {}, acked: {}}
-        
         sync9.add_version(s.s9, vid, parents, changes)
         Object.entries(s.peers).forEach(x => {
             if (x[1].online) {
@@ -321,10 +346,10 @@ function create_server(c_funcs, s_text, config) {
             }
         })
          
-        sync9.add_version(s.s9, vid, parents, changes)
+        sync9.add_version(s.s9, vid, clone(parents), changes)
         Object.entries(s.peers).forEach(x => {
             if (x[1].online) {
-                c_funcs.add_version(x[0], vid, parents, changes)
+                c_funcs.add_version(x[0], vid, clone(parents), changes)
                 if (s.config.prune) s.prune_info[vid].sent[x[0]] = true
             }
         })
@@ -346,8 +371,13 @@ function create_server(c_funcs, s_text, config) {
             return
         }
         s.prune_info[vid].acked[uid] = true
-        if (Object.keys(s.prune_info[vid].sent).every(x => s.prune_info[vid].acked[x])) 
-            prune()
+        if (Object.keys(s.prune_info[vid].sent).every(x => s.prune_info[vid].acked[x])) {
+            // We've met the prune conditions
+            s.p_counter = (s.p_counter + 1) % s.config.prune_freq
+            // But we still have to prune only every $prune_freq$ iterations
+            if (s.p_counter == 0)
+                prune()
+        }
         
     }
     

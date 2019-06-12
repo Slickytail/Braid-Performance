@@ -1,5 +1,6 @@
 var automerge_network = require("./test_networks/automerge_network.js")
 var sync9_network = require("./test_networks/sync9_network.js")
+var sharedb_network = require("./test_networks/sharedb_network.js")
 var random = require("./local_modules/random.js")
 const { PerformanceObserver, performance } = require('perf_hooks');
 
@@ -46,10 +47,7 @@ function write_dialogue(d) {
                 var del_length = Math.floor(d.m + (2*rand() - 1) * d.v)
                 var start = rand()
                 
-                var ins_length = Math.floor(d.m + (2*rand() - 1) * d.v)
-                var ins = ""
-                if (ins_length > 0)
-                    ins = Z(ins_length).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
+                ins = Z(del_length).map(() => alphabet[Math.floor(rand()*alphabet.length)]).join('')
                 eline.details = {start: start, len: del_length, ins: ins}
                 total_edits++
                 next_client = (next_client + 1) % d.C
@@ -59,7 +57,6 @@ function write_dialogue(d) {
             
         }
         // We've finished the dialogue, let's fullsync and then finish
-        console.log("Fullsyncing")
         yield full_sync
         return
         
@@ -81,16 +78,27 @@ exports.run_test = (params) => {
     performance.mark("AM_S")
     automerge_network.run_trial(dialogue)
     performance.mark("AM_E")
-    performance.measure("Automerge", "AM_S", "AM_E")*/
+    performance.measure("Automerge", "AM_S", "AM_E")
     
     var dialogue = write_dialogue(params)
     performance.mark("S9_S")
-    sync9_network.run_trial(dialogue)
-    performance.mark("S9_E")
-    performance.measure(`Sync9 (${params.tag})`, "S9_S", "S9_E")
-    obs.disconnect()
+    sync9_network.run_trial(dialogue, () => {
+        performance.mark("S9_E")
+        performance.measure(`Sync9 (${params.tag})`, "S9_S", "S9_E")
+        obs.disconnect()
+        console.error(runtimes)
+    })*/
     
-    console.error(runtimes)
+    setTimeout(() => {
+        var dialogue = write_dialogue(params)
+        performance.mark("SDB_S")
+        sharedb_network.run_trial(dialogue, () => {
+            performance.mark("SDB_E")
+            performance.measure(`ShareDB`, "SDB_S", "SDB_E")
+            
+        })
+    }, 100)
+    
     return {
         statusCode: 200,
         body: JSON.stringify(runtimes)
@@ -99,16 +107,17 @@ exports.run_test = (params) => {
 }
 
 var d = {"seed": "newseed",
- "N" : 200,
- "m" : 20,
- "v" : 10,
- "L" : 3000,
- "EPS" : 0.45,
- "LS" : 10,
- "C": 20,
+ "N" : 10,
+ "m" : 5,
+ "v" : 3,
+ "L" : 50,
+ "EPS" : 0.2,
+ "LS" : 0,
+ "C": 3,
  "prune": true,
- "prune_freq": 10,
- "tag": ""
+ "prune_freq": 5,
+ "tag": "",
+ "debug": true
 }
 if (d.prune) {
     if (d.prune_freq == 1)
