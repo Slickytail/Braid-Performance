@@ -94,7 +94,7 @@ function run_trial(dl, finished) {
         Object.values(clients).forEach(c => c.prune())
         
         tests.good_check([server].concat(Object.values(clients)))
-        console.error("[Sync9]", debug_data)
+        console.table(debug_data)
         
         tick("Finished")
         if (dl.d.debug)

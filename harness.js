@@ -65,62 +65,71 @@ function write_dialogue(d) {
     
 }
 
-exports.run_test = (params) => {
+function run_test(params) {
     var runtimes = {}
-    const n_tests = 3
+    const n_tests = 2
     const obs = new PerformanceObserver((items, observer) => {
-        items.getEntries().forEach(x => runtimes[x.name] = x.duration)
+        items.getEntries().forEach(x => runtimes[x.name] = +(x.duration / 1000).toFixed(2))
         performance.clearMarks();
         if (Object.keys(runtimes).length == n_tests) {
             observer.disconnect()
-            console.error("[Timing]", runtimes)
+            fin()
         }
     });
     obs.observe({ entryTypes: ['measure'], buffered: true})
-    
+    /*
     function automerge() {
         var dialogue = write_dialogue(params)
+        console.group("[Automerge]")
         performance.mark("AM_S")
         automerge_network.run_trial(dialogue, () => {
             performance.mark("AM_E")
             performance.measure("Automerge", "AM_S", "AM_E")
+            console.log("Automerge finished")
+            console.groupEnd()
             setImmediate(sync9)
             
         })
-    }
+    }*/
     function sync9() {
         var dialogue = write_dialogue(params)
+        console.group("[Sync9]")
         performance.mark("S9_S")
         sync9_network.run_trial(dialogue, () => {
             performance.mark("S9_E")
             performance.measure(`Sync9 (${params.tag})`, "S9_S", "S9_E")
+            console.log("Sync9 finished")
+            console.groupEnd()
             setImmediate(sharedb)
             
         })
     }
     function sharedb() {
         var dialogue = write_dialogue(params)
+        console.group("[ShareDB]")
         performance.mark("SDB_S")
         sharedb_network.run_trial(dialogue, () => {
             performance.mark("SDB_E")
             performance.measure(`ShareDB`, "SDB_S", "SDB_E")
-            
+            console.log("ShareDB finished")
+            console.groupEnd()
         })
     }
-    automerge()
-    
-    return {
-        statusCode: 200,
-        body: JSON.stringify(runtimes)
+    sync9()
+    function fin() {
+        console.group("[Timing]")
+        console.table(runtimes)
+        console.log("All tests finished")
+        console.groupEnd()
     }
     
 }
 
 var d = {"seed": "seeddd",
  "N" : 200,
- "m" : 10,
- "v" : 2,
- "L" : 200,
+ "m" : 50,
+ "v" : 10,
+ "L" : 1000,
  "EPS" : 0.5,
  "LS" : 5,
  "C": 10,
@@ -139,6 +148,4 @@ if (d.prune) {
     d.tag = "no prune"
 }
 
-exports.run_test(d)
-
-
+run_test(d)

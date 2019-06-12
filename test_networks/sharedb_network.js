@@ -20,8 +20,9 @@ function run_trial(dl, finished) {
         })()
     }
     function ready() {
+        clients["server"] = server
         tests.read(dl.w, clients, null, () => {
-            tests.good_check([server].concat(Object.values(clients)), () => {
+            tests.good_check(clients, () => {
                 server.wss.close()
                 server.share.close(finished)
             })
@@ -70,16 +71,17 @@ function create_client(config, uid) {
 }
 
 function create_server(config, s_text) {
-    var s = {}
-    s.messages = []
-    s.has_messages = () => s.messages.length
-    s.buffers = ["messages"]
+    
+    var s = {};
+    s.messages = [];
+    s.has_messages = () => s.messages.length;
+    s.buffers = ["messages"];
     
     s.share = new ShareDB({
         disableDocAction: true,
-        disableSpaceDelimitedActions: true})
+        disableSpaceDelimitedActions: true});
     
-    init_doc(start_server)
+    init_doc(start_server);
     
     function init_doc(callback) {
         var connection = s.share.connect();
@@ -88,27 +90,29 @@ function create_server(config, s_text) {
             if (err) throw err;
             if (s.doc.type === null) {
                 s.doc.create({text: s_text}, start_server);
-                return
+                return;
             }
             start_server();
         })
     }
     function start_server() {
-        s.wss = new WebSocket.Server({port: port}) // Recieves join messages
+        s.wss = new WebSocket.Server({port: port}); // Recieves join messages
+        
         s.wss.on('connection', ws => {
-            /* var _emit = ws.emit
+            ws._emit = ws.emit
             ws.emit = function(...args) {
-                var onprocess = () => {_emit(...args)}
+                var onprocess = () => {this._emit(...args);}
                 onprocess.time = config.LS
+                onprocess.type = args[0]
                 s.messages.push(onprocess)
-            } */
+            }
             var stream = new WebSocketJSONStream(ws);
             s.share.listen(stream);
         })
     }
     
     s.read = () => {
-        return s.doc.data.text
+        return s.doc.data.text;
     }
     
     return s

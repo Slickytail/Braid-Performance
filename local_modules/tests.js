@@ -13,6 +13,8 @@ function read_dialogue(writer, clients, tick, finished) {
                 await fullsync(clients, tick);
             }
             if (line.action == 'tick') {
+                if (clients["server"])
+                    process_network(clients["server"])
                 if (tick) tick("Reading");
             }
             var c = clients[line.client];
@@ -21,6 +23,7 @@ function read_dialogue(writer, clients, tick, finished) {
             } else if (line.action == 'net') {
                 process_network(c);
             }   
+            
             setImmediate(next_line);
  
         }
@@ -67,7 +70,7 @@ function in_sync(nodes) {
 }
 
 function good_check(nodes, success) {
-    if (!in_sync(nodes)) {
+    if (!in_sync(Object.values(nodes))) {
         nodes.forEach(x => {
             console.log(x.read())
         })

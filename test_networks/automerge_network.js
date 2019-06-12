@@ -43,7 +43,6 @@ function run_trial(dl, finished) {
         c.state = 'connected'
         c.join()
     })
-    var l = 0;
     tests.read(w, clients, null, () => {
         tests.good_check([server].concat(Object.values(clients)))
         if (finished) finished()
@@ -57,9 +56,10 @@ function create_client(s_funcs, uid) {
     var c = {}
     c.uid = uid
     c.state = 'disconnected'
+    c.has_messages = () => {c.incoming.length || c.outgoing.length}
     c.incoming = []
     c.outgoing = []
-    
+    c.buffers = ["incoming", "outgoing"]
     
     c.join = () => {
         s_funcs.join(c.uid)
