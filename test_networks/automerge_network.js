@@ -1,7 +1,8 @@
-module.exports = {run_trial: run_trial}
-var Automerge = require("automerge")
-var sizeof = require('object-sizeof')
-var tests = require("../local_modules/tests")
+module.exports = {run_trial: run_trial};
+const Automerge = require("automerge");
+const sizeof = require('../local_modules/better_sizeof');
+const fs = require('fs');
+var tests = require("../local_modules/tests");
 
 function run_trial(dl, finished) {
 
@@ -43,12 +44,20 @@ function run_trial(dl, finished) {
         c.state = 'connected'
         c.join()
     })
-    tests.read(w, clients, null, () => {
+    outfile = fs.createWriteStream("./Visualization/automerge_memory.csv");
+    outfile.write("eps,ls,c,i,e,server_size,client_size\n");
+    var i = 0;
+    function tick(e) {
+        i++;
+        var server_size = sizeof(server);
+        var client_size = sizeof(Object.values(clients));
+        outfile.write(`${dl.d.EPS},${dl.d.LS},${dl.d.C},${i},${e},${server_size},${client_size}\n`)
+    }
+    tests.read(w, clients, tick, () => {
         tests.good_check([server].concat(Object.values(clients)))
         if (finished) finished()
+        outfile.end()
     })
-    
-    
     
 }
 

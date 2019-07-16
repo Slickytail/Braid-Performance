@@ -10,7 +10,8 @@ module.exports = {create: sync9_create,
 }
 
 function sync9_prune2(x, has_everyone_whos_seen_a_seen_b, has_everyone_whos_seen_a_seen_b_2) {
-    var seen_nodes = {}
+    // Prune the spacetree
+    var seen_nodes = {} // Keep track of what nodes we've pruned
     var did_something = true
     function rec(x) {
         if (x && typeof(x) == 'object') {
@@ -31,46 +32,48 @@ function sync9_prune2(x, has_everyone_whos_seen_a_seen_b, has_everyone_whos_seen
             }
         }
     }
+    // Pruning could open up new places to prune, so we want to keep going until we can't prune any more
     while (did_something) {
         did_something = false
         rec(x)
     }
-
+    // Prune the time dag
     var visited = {}
     var delete_us = {}
-    function f(vid) {
+    function f(vid) { // Given a node
         if (visited[vid]) return
         visited[vid] = true
-        Object.keys(x.T[vid]).forEach(pid => {
-            if (has_everyone_whos_seen_a_seen_b_2(pid, vid) && !seen_nodes[pid]) {
-                delete_us[pid] = true
+        Object.keys(x.T[vid]).forEach(pid => { // For each parent of that node
+            if (has_everyone_whos_seen_a_seen_b_2(pid, vid) && !seen_nodes[pid]) { // If the child is sufficiently acked AND [something else?]
+                delete_us[pid] = true // We can delete the parent
             }
-            f(pid)
+            f(pid) // Keep going
         })
     }
-    Object.keys(x.leaves).forEach(f)
+    Object.keys(x.leaves).forEach(f) // Explore the whole spacetree
 
+    // Once we know what we can prune in the time dag, let's do the pruning and rearrange parental links
     var visited = {}
     var forwards = {}
     function g(vid) {
         if (visited[vid]) return
         visited[vid] = true
-        if (delete_us[vid])
-            forwards[vid] = {}
+        if (delete_us[vid]) // If we're going to delete this node
+            forwards[vid] = {} // We'll need to figure out what its new parents will be
         Object.keys(x.T[vid]).forEach(pid => {
-            g(pid)
-            if (delete_us[vid]) {
-                if (delete_us[pid])
-                    Object.assign(forwards[vid], forwards[pid])
-                else
-                    forwards[vid][pid] = true
-            } else if (delete_us[pid]) {
-                delete x.T[vid][pid]
-                Object.assign(x.T[vid], forwards[pid])
+            g(pid) // Prune from top-down
+            if (delete_us[vid]) { // If we're going to prune this child
+                if (delete_us[pid]) // If the parent is getting deleted too
+                    Object.assign(forwards[vid], forwards[pid]) // Parent's parents become children's parents
+                else // Parent is NOT getting deleted
+                    forwards[vid][pid] = true // PID is a parent of deleted VID
+            } else if (delete_us[pid]) { // If we're deleting the parent of this node
+                delete x.T[vid][pid] // Then delete the reference from the child to the parent
+                Object.assign(x.T[vid], forwards[pid]) // And the now-deleted parent's parents become parents of the child
             }
         })
     }
-    Object.keys(x.leaves).forEach(g)
+    Object.keys(x.leaves).forEach(g) // Explore the whole spacetree
     Object.keys(delete_us).forEach(vid => delete x.T[vid])
     return delete_us
 }
@@ -136,6 +139,7 @@ function sync9_space_dag_prune2(S, has_everyone_whos_seen_a_seen_b, seen_nodes) 
             !(next.elems.length == 0 && !next.end_cap && next.nexts.length > 0) &&
             Object.keys(node.deleted_by).every(x => next.deleted_by[x]) &&
             Object.keys(next.deleted_by).every(x => node.deleted_by[x])) {
+                
             node.elems = node.elems.concat(next.elems)
             node.end_cap = next.end_cap
             node.nexts = next.nexts

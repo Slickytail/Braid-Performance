@@ -1,19 +1,19 @@
 module.exports = {run_trial: run_trial}
-var clone = require('clone')
-var sizeof = require('object-sizeof')
-var sync9 = require("../local_modules/sync9")
-var tests = require("../local_modules/tests")
-var random = require("../local_modules/random")
-const { PerformanceObserver, performance } = require('perf_hooks');
+const clone = require('clone')
+const sync9 = require("../local_modules/sync9")
+const tests = require("../local_modules/tests")
+const random = require("../local_modules/random")
+const sizeof = require('../local_modules/better_sizeof');
+
 var debug_data = {
     total_prunes: 0,
     initial_prunes: 0,
     good_prunes: 0,
     nodes_pruned: 0
-}
+};
+
 
 function run_trial(dl, finished) {
-    var n_clients = dl.d.C
     var clients = {}
     var w = dl.w
     
@@ -68,41 +68,29 @@ function run_trial(dl, finished) {
         c.state = 'connected'
         c.join()
     })
-    var l = 0;
-    var debug_frames = []
-    var tick = (state) => {
-        if (!dl.d.debug) return
-        var frame = {}
-        frame.server_s9 = server.s9
-        frame.client_s9s = Object.values(clients).map(c => c.s9)
-        frame.tag = state
-        debug_frames.push(clone(frame))
-        
-    }
     
+    var i = 0;
+    function tick(e) {
+        i++;
+        var server_size = sizeof(server);
+        var client_size = sizeof(Object.values(clients));
+        outfile.write(`${dl.d.EPS},${dl.d.LS},${dl.d.C},${i},${e},${dl.d.prune_freq},${server_size},${client_size}\n`)
+    }
     tests.read(w, clients, tick, async () => {
-        // Add two merge-points, this allows the spacetree to be FULLY pruned
-        tick("Finished reading")
+        /*// Add two merge-points, this allows the spacetree to be FULLY pruned
         server.local_add_version('Vf0', clone(server.s9.leaves), [])
-        tick("Added Vf0")
         server.local_add_version('Vf1', clone(server.s9.leaves), [])
-        tick("Added Vf1")
         
         await tests.fullsync(clients, tick)
         server._force_prune()
         await tests.fullsync(clients, tick)
-        Object.values(clients).forEach(c => c.prune())
+        Object.values(clients).forEach(c => c.prune())*/
         
         tests.good_check([server].concat(Object.values(clients)))
-        console.table(debug_data)
-        
-        tick("Finished")
-        if (dl.d.debug)
-            console.log(`var debug_frames = ${JSON.stringify(debug_frames)};`);
         
         if (finished)
             finished()
-
+        //outfile.end()
     })
     
 }

@@ -6,8 +6,10 @@
   "dependencies": {
     "@teamwork/websocket-json-stream": "^2.0.0",
     "automerge": "^0.10.1",
+    "buffer": "^5.2.1",
     "clone": "^2.1.2",
-    "object-sizeof": "^1.4.0",
+    "ot-text": "^1.0.2",
+    "ottypes": "^1.0.3",
     "sharedb": "^1.0.0-beta.23",
     "ws": "^7.0.0"
   },
